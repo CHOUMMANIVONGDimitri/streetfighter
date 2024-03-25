@@ -1,49 +1,76 @@
 export class Character {
-    constructor(name, x, y, velocity) {
+    constructor(name, x, y, direction) {
         this.name = name;
         this.image = new Image();
         this.frames = new Map();
         this.position = { x, y };
-        this.velocity = velocity;
-        this.animationFrame = 1;
+        this.direction = direction;
+        this.velocity = 150 * direction;
+        this.animationFrame = 0;
         this.animationTimer = 0;
-        this.animationSpeed = 16.67;
+        this.state = 'walkForwards';
+        this.animations = {};
     }
 
-    update(frameTime, context) {
-        this.animationTimer += frameTime * this.animationSpeed;
+    changeState = () => (this.velocity * this.direction < 0 ? 'walkBackwards' : 'walkForwards');
 
-        if (this.animationTimer >= 1) {
+    update(time, context) {
+        const [[, , width]] = this.frames.get(this.animations[this.state][this.animationFrame]);
+
+        if (time.previous > this.animationTimer + 60) {
+            this.animationTimer = time.previous;
+
             this.animationFrame++;
-            if (this.animationFrame > 6) this.animationFrame = 1;
-            this.animationTimer = 0;
+            if (this.animationFrame > 5) this.animationFrame = 0;
         }
-        const [, , width] = this.frames.get(`forwards-${this.animationFrame}`);
-        this.position.x += this.velocity;
 
-        if (
-            this.position.x > context.canvas.width - width ||
-            this.position.x < 0
-        ) {
-            this.velocity = -this.velocity;
+        if (document.visibilityState === 'visible') {
+            // check if visibility of current windows and update positions
+            this.position.x += this.velocity * time.secondsPassed;
+
+            if (this.position.x > context.canvas.width - width / 2) {
+                this.position.x = context.canvas.width - width / 2;
+                this.velocity = -this.velocity;
+                this.state = this.changeState();
+            } else if (this.position.x < width / 2) {
+                this.position.x = width / 2;
+                this.velocity = -this.velocity;
+                this.state = this.changeState();
+            }
         }
+    }
+
+    drawDebug(context) {
+        context.lineWidth = 1;
+
+        context.beginPath();
+        context.strokeStyle = 'white';
+        context.moveTo(Math.floor(this.position.x) - 4.5, Math.floor(this.position.y));
+        context.lineTo(Math.floor(this.position.x) + 4.5, Math.floor(this.position.y));
+        context.moveTo(Math.floor(this.position.x), Math.floor(this.position.y - 4.5));
+        context.lineTo(Math.floor(this.position.x), Math.floor(this.position.y + 4.5));
+        context.stroke();
     }
 
     draw(context) {
-        const [x, y, width, height] = this.frames.get(
-            `forwards-${this.animationFrame}`
+        const [[x, y, width, height], [originX, originY]] = this.frames.get(
+            this.animations[this.state][this.animationFrame],
         );
 
+        context.scale(this.direction, 1);
         context.drawImage(
             this.image,
             x,
             y,
             width,
             height,
-            this.position.x,
-            this.position.y,
+            Math.floor(this.position.x * this.direction) - originX,
+            Math.floor(this.position.y) - originY,
             width,
-            height
+            height,
         );
+        context.setTransform(1, 0, 0, 1, 0, 0);
+
+        this.drawDebug(context);
     }
 }
