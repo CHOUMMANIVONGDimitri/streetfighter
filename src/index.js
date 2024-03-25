@@ -1,42 +1,42 @@
-import { Ryu } from "./entities/characters/Ryu.js";
-import { Ken } from "./entities/characters/Ken.js";
-import { Stage } from "./entities/Stage.js";
-import { FpsCounter } from "./entities/FpsCounter.js";
+import { Ryu } from './entities/characters/Ryu.js';
+import { Ken } from './entities/characters/Ken.js';
+import { Stage } from './entities/Stage.js';
+import { FpsCounter } from './entities/FpsCounter.js';
+import { STAGE_FLOOR } from './constants/stage.js';
+import { FighterDirection } from './constants/fighter.js';
 
-const GameViewport = {
-    WIDTH: 384,
-    HEIGHT: 244,
-};
+const CURRENT_FPS = 60;
 
 window.onload = () => {
-    const canvasEl = document.querySelector("canvas");
-    const context = canvasEl.getContext("2d");
+    const canvasEl = document.querySelector('canvas');
+    const context = canvasEl.getContext('2d');
 
-    canvasEl.width = GameViewport.WIDTH;
-    canvasEl.height = GameViewport.HEIGHT;
+    context.imageSmoothingEnabled = false;
 
     const entities = [
         new Stage(),
-        new Ryu(80, 110, 2), // velocity set to 2 by default
-        new Ken(80, 110, -2),
+        new Ryu(104, STAGE_FLOOR, FighterDirection.LEFT), // velocity set to 150 by default
+        new Ken(280, STAGE_FLOOR, FighterDirection.RIGHT),
         new FpsCounter(),
     ];
 
-    let previousTime = 0;
-    let accumulator = 0;
-    const maxFrameTime = 1000 / 60; // lock frame at 60
+    let frameTime = {
+        previous: 0,
+        secondsPassed: 0,
+        max: 1000 / CURRENT_FPS, // lock frame at 60
+    };
 
     function frame(time) {
-        const deltaTime = time - previousTime;
-        previousTime = time;
-        accumulator += deltaTime;
+        frameTime = {
+            ...frameTime,
+            secondsPassed: (time - frameTime.previous) / 1000,
+            previous: time,
+        };
 
-        while (accumulator >= maxFrameTime) {
-            for (const entity of entities) {
-                entity.update(maxFrameTime / 1000, context);
-            }
+        frameTime.previous = time;
 
-            accumulator -= maxFrameTime;
+        for (const entity of entities) {
+            entity.update(frameTime, context);
         }
 
         for (const entity of entities) {
