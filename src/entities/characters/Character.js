@@ -1,60 +1,201 @@
+import { FighterState } from "../../constants/fighter.js";
+import { STAGE_FLOOR } from "../../constants/stage.js";
+
 export class Character {
     constructor(name, x, y, direction) {
         this.name = name;
         this.image = new Image();
         this.frames = new Map();
         this.position = { x, y };
+        this.velocity = { x: 0, y: 0 };
+        this.initialVelocity = {};
         this.direction = direction;
-        this.velocity = 150 * direction;
         this.animationFrame = 0;
         this.animationTimer = 0;
-        this.state = 'walkForwards';
         this.animations = {};
+        this.gravity = 0;
+
+        this.states = {
+            [FighterState.IDLE]: {
+                init: this.handleWalkIdleInit.bind(this),
+                update: () => {},
+                validForm: [
+                    undefined,
+                    FighterState.IDLE,
+                    FighterState.WALK_FORWARD,
+                    FighterState.WALK_BACKWARD,
+                    FighterState.JUMP_UP,
+                    FighterState.JUMP_FORWARD,
+                    FighterState.JUMP_BACKWARD,
+                    FighterState.CROUCH_UP,
+                ],
+            },
+            [FighterState.WALK_FORWARD]: {
+                init: this.handleMoveInit.bind(this),
+                update: () => {},
+                validForm: [FighterState.IDLE, FighterState.WALK_BACKWARD],
+            },
+            [FighterState.WALK_BACKWARD]: {
+                init: this.handleMoveInit.bind(this),
+                update: () => {},
+                validForm: [FighterState.IDLE, FighterState.WALK_FORWARD],
+            },
+            [FighterState.JUMP_UP]: {
+                init: this.handleJumpInit.bind(this),
+                update: this.handleJumpState.bind(this),
+                validForm: [FighterState.IDLE],
+            },
+            [FighterState.JUMP_FORWARD]: {
+                init: this.handleJumpInit.bind(this),
+                update: this.handleJumpState.bind(this),
+                validForm: [FighterState.IDLE, FighterState.WALK_FORWARD],
+            },
+            [FighterState.JUMP_BACKWARD]: {
+                init: this.handleJumpInit.bind(this),
+                update: this.handleJumpState.bind(this),
+                validForm: [FighterState.IDLE, FighterState.WALK_BACKWARD],
+            },
+            [FighterState.CROUCH]: {
+                init: () => {},
+                update: () => {},
+                validForm: [FighterState.CROUCH_DOWN],
+            },
+            [FighterState.CROUCH_DOWN]: {
+                init: () => {},
+                update: this.handleCrouchDownState.bind(this),
+                validForm: [
+                    FighterState.IDLE,
+                    FighterState.WALK_FORWARD,
+                    FighterState.WALK_BACKWARD,
+                ],
+            },
+            [FighterState.CROUCH_UP]: {
+                init: () => {},
+                update: this.handleCrouchUpState.bind(this),
+                validForm: [FighterState.CROUCH],
+            },
+        };
+
+        this.changeState(FighterState.IDLE);
     }
 
-    changeState = () => (this.velocity * this.direction < 0 ? 'walkBackwards' : 'walkForwards');
+    changeState(newState) {
+        if (
+            newState === this.currentState ||
+            !this.states[newState].validForm.includes(this.currentState)
+        )
+            return;
 
-    update(time, context) {
-        const [[, , width]] = this.frames.get(this.animations[this.state][this.animationFrame]);
+        this.currentState = newState;
+        this.animationFrame = 0;
 
-        if (time.previous > this.animationTimer + 60) {
+        this.states[this.currentState].init();
+    }
+
+    /* IDLE */
+    handleWalkIdleInit() {
+        this.velocity.x = 0;
+        this.velocity.y = 0;
+    }
+
+    /* WALK MOVEMENT */
+    handleMoveInit() {
+        this.velocity.x = this.initialVelocity.x[this.currentState] ?? 0;
+    }
+
+    /* JUMPS*/
+    handleJumpInit() {
+        this.velocity.y = this.initialVelocity.jump;
+        this.handleMoveInit();
+    }
+
+    handleJumpState(time) {
+        this.velocity.y += this.gravity * time.secondsPassed;
+
+        if (this.position.y > STAGE_FLOOR) {
+            this.position.y = STAGE_FLOOR;
+            this.changeState(FighterState.IDLE);
+        }
+    }
+
+    /* CROUCH */
+
+    handleCrouchDownState() {
+        if (this.animations[this.currentState][this.animationFrame][1] === -2) {
+            this.changeState(FighterState.CROUCH);
+        }
+    }
+
+    handleCrouchUpState() {
+        if (this.animations[this.currentState][this.animationFrame][1] === -2) {
+            this.changeState(FighterState.IDLE);
+        }
+    }
+
+    updateStageContraints(context) {
+        const WIDTH = 32;
+
+        if (this.position.x > context.canvas.width - WIDTH) {
+            this.position.x = context.canvas.width - WIDTH;
+        } else if (this.position.x < WIDTH) {
+            this.position.x = WIDTH;
+        }
+    }
+
+    updateAnimation(time) {
+        const animation = this.animations[this.currentState];
+        const [, frameDelay] = animation[this.animationFrame];
+
+        if (time.previous > this.animationTimer + frameDelay) {
             this.animationTimer = time.previous;
 
-            this.animationFrame++;
-            if (this.animationFrame > 5) this.animationFrame = 0;
-        }
+            if (frameDelay > 0) this.animationFrame++;
 
-        if (document.visibilityState === 'visible') {
+            if (this.animationFrame >= animation.length)
+                this.animationFrame = 0;
+        }
+    }
+
+    update(time, context) {
+        if (document.visibilityState === "visible") {
             // check if visibility of current windows and update positions
-            this.position.x += this.velocity * time.secondsPassed;
-
-            if (this.position.x > context.canvas.width - width / 2) {
-                this.position.x = context.canvas.width - width / 2;
-                this.velocity = -this.velocity;
-                this.state = this.changeState();
-            } else if (this.position.x < width / 2) {
-                this.position.x = width / 2;
-                this.velocity = -this.velocity;
-                this.state = this.changeState();
-            }
+            this.position.x +=
+                this.velocity.x * this.direction * time.secondsPassed;
+            this.position.y += this.velocity.y * time.secondsPassed;
         }
+
+        this.states[this.currentState].update(time, context);
+        this.updateAnimation(time);
+        this.updateStageContraints(context);
     }
 
     drawDebug(context) {
         context.lineWidth = 1;
 
         context.beginPath();
-        context.strokeStyle = 'white';
-        context.moveTo(Math.floor(this.position.x) - 4.5, Math.floor(this.position.y));
-        context.lineTo(Math.floor(this.position.x) + 4.5, Math.floor(this.position.y));
-        context.moveTo(Math.floor(this.position.x), Math.floor(this.position.y - 4.5));
-        context.lineTo(Math.floor(this.position.x), Math.floor(this.position.y + 4.5));
+        context.strokeStyle = "white";
+        context.moveTo(
+            Math.floor(this.position.x) - 4.5,
+            Math.floor(this.position.y)
+        );
+        context.lineTo(
+            Math.floor(this.position.x) + 4.5,
+            Math.floor(this.position.y)
+        );
+        context.moveTo(
+            Math.floor(this.position.x),
+            Math.floor(this.position.y - 4.5)
+        );
+        context.lineTo(
+            Math.floor(this.position.x),
+            Math.floor(this.position.y + 4.5)
+        );
         context.stroke();
     }
 
     draw(context) {
         const [[x, y, width, height], [originX, originY]] = this.frames.get(
-            this.animations[this.state][this.animationFrame],
+            this.animations[this.currentState][this.animationFrame][0]
         );
 
         context.scale(this.direction, 1);
@@ -67,7 +208,7 @@ export class Character {
             Math.floor(this.position.x * this.direction) - originX,
             Math.floor(this.position.y) - originY,
             width,
-            height,
+            height
         );
         context.setTransform(1, 0, 0, 1, 0, 0);
 
