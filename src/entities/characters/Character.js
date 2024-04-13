@@ -1,24 +1,30 @@
 import { FighterState } from "../../constants/fighter.js";
 import { STAGE_FLOOR } from "../../constants/stage.js";
+import { isKeyDown, isKeyUp } from "../../controlHandler.js";
+import * as control from "../../controlHandler.js";
 
 export class Character {
-    constructor(name, x, y, direction) {
+    constructor(name, x, y, direction, playerId) {
         this.name = name;
-        this.image = new Image();
-        this.frames = new Map();
+        this.playerId = playerId;
+
         this.position = { x, y };
+        this.direction = direction;
         this.velocity = { x: 0, y: 0 };
         this.initialVelocity = {};
-        this.direction = direction;
+        this.gravity = 0;
+
+        this.frames = new Map();
         this.animationFrame = 0;
         this.animationTimer = 0;
         this.animations = {};
-        this.gravity = 0;
+
+        this.image = new Image();
 
         this.states = {
             [FighterState.IDLE]: {
                 init: this.handleWalkIdleInit.bind(this),
-                update: () => {},
+                update: this.handleIldeState.bind(this),
                 validForm: [
                     undefined,
                     FighterState.IDLE,
@@ -32,12 +38,12 @@ export class Character {
             },
             [FighterState.WALK_FORWARD]: {
                 init: this.handleMoveInit.bind(this),
-                update: () => {},
+                update: this.handleWalkForwardState.bind(this),
                 validForm: [FighterState.IDLE, FighterState.WALK_BACKWARD],
             },
             [FighterState.WALK_BACKWARD]: {
                 init: this.handleMoveInit.bind(this),
-                update: () => {},
+                update: this.handleWalkBackwardState.bind(this),
                 validForm: [FighterState.IDLE, FighterState.WALK_FORWARD],
             },
             [FighterState.JUMP_UP]: {
@@ -56,8 +62,8 @@ export class Character {
                 validForm: [FighterState.IDLE, FighterState.WALK_BACKWARD],
             },
             [FighterState.CROUCH]: {
-                init: () => {},
-                update: () => {},
+                init: this.handleCrouchInit.bind(this),
+                update: this.handleCrouchState.bind(this),
                 validForm: [FighterState.CROUCH_DOWN],
             },
             [FighterState.CROUCH_DOWN]: {
@@ -98,9 +104,37 @@ export class Character {
         this.velocity.y = 0;
     }
 
+    handleIldeState() {
+        if (control.isUp(this.playerId)) this.changeState(FighterState.JUMP_UP);
+        if (control.isDown(this.playerId))
+            this.changeState(FighterState.CROUCH_DOWN);
+        if (control.isBackward(this.playerId, this.direction))
+            this.changeState(FighterState.WALK_BACKWARD);
+        if (control.isForward(this.playerId, this.direction))
+            this.changeState(FighterState.WALK_FORWARD);
+    }
+
     /* WALK MOVEMENT */
     handleMoveInit() {
         this.velocity.x = this.initialVelocity.x[this.currentState] ?? 0;
+    }
+
+    handleWalkForwardState() {
+        if (!control.isForward(this.playerId, this.direction))
+            this.changeState(FighterState.IDLE);
+        if (control.isUp(this.playerId))
+            this.changeState(FighterState.JUMP_FORWARD);
+        if (control.isDown(this.playerId))
+            this.changeState(FighterState.CROUCH_DOWN);
+    }
+
+    handleWalkBackwardState() {
+        if (!control.isBackward(this.playerId, this.direction))
+            this.changeState(FighterState.IDLE);
+        if (control.isUp(this.playerId))
+            this.changeState(FighterState.JUMP_BACKWARD);
+        if (control.isDown(this.playerId))
+            this.changeState(FighterState.CROUCH_DOWN);
     }
 
     /* JUMPS*/
@@ -119,6 +153,15 @@ export class Character {
     }
 
     /* CROUCH */
+
+    handleCrouchInit() {
+        this.handleWalkIdleInit();
+    }
+
+    handleCrouchState() {
+        if (!control.isDown(this.playerId))
+            this.changeState(FighterState.CROUCH_UP);
+    }
 
     handleCrouchDownState() {
         if (this.animations[this.currentState][this.animationFrame][1] === -2) {
