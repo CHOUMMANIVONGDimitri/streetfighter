@@ -4,12 +4,18 @@ import { FighterDirection } from "./constants/fighter.js";
 const holdKeys = new Set();
 const gamePads = new Map();
 
+const mappedKeys = controls
+    .map(({ keyboard }) => Object.values(keyboard))
+    .flat();
+
 const handleKeyDown = (e) => {
+    if (!mappedKeys.includes(e.code)) return;
     e.preventDefault();
     holdKeys.add(e.code);
 };
 
 const handleKeyUp = (e) => {
+    if (!mappedKeys.includes(e.code)) return;
     e.preventDefault();
     holdKeys.delete(e.code);
 };
