@@ -9,6 +9,7 @@ import {
     registerGamepadEvent,
     registerKeyboardEvent,
 } from "./controlHandler.js";
+import { Shadow } from "./entities/Shadow.js";
 
 const CURRENT_FPS = 60;
 
@@ -20,7 +21,12 @@ export class Game {
             new Ken(280, STAGE_FLOOR, FighterDirection.LEFT, 1),
         ];
 
-        this.entities = [new Stage(), ...this.fighters, new FpsCounter()];
+        this.entities = [
+            new Stage(),
+            ...this.fighters.map((fighter) => new Shadow(fighter)),
+            ...this.fighters,
+            new FpsCounter(),
+        ];
 
         this.frameTime = {
             previous: 0,
